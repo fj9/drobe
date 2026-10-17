@@ -137,6 +137,10 @@ export function AddScreen({ editId }: { editId?: string }) {
           {editing ? (
             <>
               <button type="submit" class="primary">Save</button>
+              <button type="button" onClick={async () => {
+                const lines = [editing.name, editing.brand && `Brand: ${editing.brand}`, editing.size && `Size: ${editing.size}`, editing.material && `Material: ${editing.material}`, editing.colour && `Colour: ${editing.colour}`].filter(Boolean).join('\n');
+                try { await navigator.clipboard.writeText(lines); setFlash('Details copied'); } catch { setFlash('Could not copy on this browser'); }
+              }}>Copy details</button>
               <button type="button" class="ghost" onClick={() => history.back()}>Cancel</button>
               <ConfirmButton label="Delete" confirmLabel="Yes, delete permanently" onConfirm={async () => { await actions.deleteItem(editing.id); go('/items'); }} />
             </>

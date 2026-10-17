@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { useStore } from '../store/store';
+import { actions, useStore } from '../store/store';
 import { AddScreen } from './AddScreen';
 import { useHashRoute } from './common';
 import { ItemsScreen } from './ItemsScreen';
@@ -8,6 +8,7 @@ import { Onboarding } from './Onboarding';
 import { RailsScreen } from './RailsScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SortScreen } from './SortScreen';
+import { ListsScreen } from './ListsScreen';
 
 const TABS = [
   { path: '/rails', label: 'Rails', icon: '▤' },
@@ -20,7 +21,7 @@ const TABS = [
 const DAY = 86_400_000;
 
 export function App() {
-  const { data, ready, saveError } = useStore();
+  const { data, ready, saveError, undoInfo } = useStore();
   const route = useHashRoute();
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW();
   const [dismissed, setDismissed] = useState(false);
@@ -30,6 +31,12 @@ export function App() {
     if (t === 'system') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
   }, [data.settings.theme]);
+
+  useEffect(() => {
+    if (!undoInfo) return;
+    const t = setTimeout(() => actions.dismissUndo(), 8000);
+    return () => clearTimeout(t);
+  }, [undoInfo]);
 
   if (!ready) return <p class="loading">Loading…</p>;
 
@@ -46,6 +53,7 @@ export function App() {
     case 'add': screen = <AddScreen />; break;
     case 'edit': screen = <AddScreen key={arg} editId={arg} />; break;
     case 'items': screen = <ItemsScreen />; break;
+    case 'lists': screen = <ListsScreen />; break;
     case 'settings': screen = <SettingsScreen />; break;
     default: screen = <RailsScreen />;
   }
@@ -67,6 +75,12 @@ export function App() {
         )}
         {screen}
       </main>
+      {undoInfo && (
+        <div class="toast" role="status">
+          <span>{undoInfo.label}</span>
+          <button onClick={() => actions.undo()}>Undo</button>
+        </div>
+      )}
       <nav class="tabbar" aria-label="Main">
         {TABS.map((t) => (
           <a key={t.path} href={`#${t.path}`} class={`tab ${active === t.path.slice(1) ? 'active' : ''} ${t.label === 'Add' ? 'add' : ''}`} aria-current={active === t.path.slice(1) ? 'page' : undefined}>

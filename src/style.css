@@ -96,3 +96,6 @@ summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
 .update.warn-bar { background: var(--warn); color: #fff; }
 .onboarding { padding-top: 24px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.toast { position: fixed; left: 12px; right: 12px; bottom: calc(68px + env(safe-area-inset-bottom)); max-width: 616px; margin: 0 auto; display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 6px 8px 6px 14px; border-radius: 12px; background: var(--accent); color: var(--accent-text); z-index: 20; }
+.toast button { background: none; color: inherit; border-color: currentColor; }

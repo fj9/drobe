@@ -18,6 +18,7 @@ export function RailsScreen() {
           {over.map((z) => `${z.name} is over by ${cap.zones[z.id].overInches} in`).join('. ')}.
         </p>
       )}
+      <p class="small"><a href="#/lists">Shopping and replace lists</a></p>
       {pile > 0 && (
         <p class="banner">
           {pile} {pile === 1 ? 'item' : 'items'} in the pile. <a href="#/sort">Start sorting</a>

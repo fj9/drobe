@@ -10,6 +10,8 @@ let repo: Repository = new IndexedDbRepository();
 let data: Data = defaultData();
 let ready = false;
 let saveError: string | undefined;
+export interface UndoInfo { itemId: string; label: string; prev: Pick<Item, 'state' | 'archivedAt' | 'archivedReason' | 'updatedAt'>; at: number }
+let undoInfo: UndoInfo | undefined;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
@@ -45,7 +47,7 @@ export function useStore() {
     l(); // catch changes that landed before this effect subscribed
     return () => void listeners.delete(l);
   }, []);
-  return { data, ready, saveError };
+  return { data, ready, saveError, undoInfo };
 }
 
 export const activePlan = (d: Data): Plan => d.plans.find((p) => p.id === ACTIVE_PLAN_ID) ?? d.plans[0];
@@ -66,6 +68,14 @@ export const actions = {
     });
   },
   setState(itemId: string, state: ItemState, reason?: ArchivedReason) {
+    const before = data.items.find((i) => i.id === itemId);
+    if (before) {
+      const verb = state === 'on-rail' ? 'Put back' : state === 'stored' ? 'Stored' : state === 'archived' ? 'Let go of' : 'Moved';
+      undoInfo = {
+        itemId, label: `${verb} "${before.name}"`, at: Date.now(),
+        prev: { state: before.state, archivedAt: before.archivedAt, archivedReason: before.archivedReason, updatedAt: before.updatedAt },
+      };
+    }
     return update((d) => {
       const it = d.items.find((i) => i.id === itemId);
       if (!it) return;
@@ -75,6 +85,19 @@ export const actions = {
       else { delete it.archivedAt; delete it.archivedReason; }
     });
   },
+  undo() {
+    const u = undoInfo;
+    undoInfo = undefined;
+    if (!u) return emit();
+    return update((d) => {
+      const it = d.items.find((i) => i.id === u.itemId);
+      if (!it) return;
+      it.state = u.prev.state; it.updatedAt = u.prev.updatedAt;
+      if (u.prev.archivedAt) it.archivedAt = u.prev.archivedAt; else delete it.archivedAt;
+      if (u.prev.archivedReason) it.archivedReason = u.prev.archivedReason; else delete it.archivedReason;
+    });
+  },
+  dismissUndo() { undoInfo = undefined; emit(); },
   deleteItem(itemId: string) {
     return update((d) => void (d.items = d.items.filter((i) => i.id !== itemId)));
   },
