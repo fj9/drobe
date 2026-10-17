@@ -6,21 +6,39 @@ import { LABELS, REASONS, type ArchivedReason, type Item } from '../types';
 import { Chip, Gauge, go } from './common';
 import { ItemImage, webImagesOn } from './art';
 
+// Off-season pile items stay hidden by default (the plan covers autumn and winter); this reveals them on request.
+let showOffSeason = false;
+
+function OffSeasonNote({ hidden, onChange }: { hidden: Item[]; onChange: () => void }) {
+  if (hidden.length === 0) return null;
+  const seasons = [...new Set(hidden.flatMap((i) => i.seasons))].map((x) => LABELS[x].toLowerCase()).join(', ');
+  return (
+    <div class="banner" role="status">
+      <p>{hidden.length} {hidden.length === 1 ? 'item is' : 'items are'} hidden because {hidden.length === 1 ? 'it is' : 'they are'} tagged {seasons} only. This plan covers autumn and winter.</p>
+      <button onClick={() => { showOffSeason = !showOffSeason; onChange(); }}>{showOffSeason ? 'Hide them again' : 'Show them anyway'}</button>
+    </div>
+  );
+}
+
 export function SortScreen({ categoryId }: { categoryId?: string }) {
   const { data } = useStore();
   const cap = capacityOf(data);
   const plan = activePlan(data);
+  const [, redraw] = useState(0);
+  const offSeasonPile = (catId?: string) =>
+    data.items.filter((i) => i.state === 'pile' && !inPlanSeasons(i, plan.seasons) && (!catId || i.category === catId));
   const catName = (id: string) => data.categories.find((c) => c.id === id)?.name ?? '?';
 
   if (categoryId === 'all') {
     const queue = data.items
-      .filter((i) => i.state === 'pile' && inPlanSeasons(i, plan.seasons))
+      .filter((i) => i.state === 'pile' && (inPlanSeasons(i, plan.seasons) || showOffSeason))
       .sort((a, b) => catName(a.category).localeCompare(catName(b.category)) || a.name.localeCompare(b.name));
     return (
       <section>
         <p><a href="#/sort">‹ All categories</a></p>
         <h1>Whole pile</h1>
         <p class="muted">{queue.length} {queue.length === 1 ? 'item' : 'items'} to decide, grouped by category.</p>
+        <OffSeasonNote hidden={offSeasonPile()} onChange={() => redraw((n) => n + 1)} />
         {queue.length === 0 && <p class="banner ok">The pile is empty.</p>}
         <ul class="cards">
           {queue.map((it, n) => {
@@ -44,6 +62,7 @@ export function SortScreen({ categoryId }: { categoryId?: string }) {
       <section>
         <h1>Sort</h1>
         <p class="muted">Pick a category and decide what goes back.</p>
+        <OffSeasonNote hidden={offSeasonPile()} onChange={() => redraw((n) => n + 1)} />
         {pileTotal > 0 && <p><a class="banner-link" href="#/sort/all">Sort the whole pile ({pileTotal})</a></p>}
         <ul class="rows card">
           {data.categories.map((c) => {
@@ -70,7 +89,7 @@ export function SortScreen({ categoryId }: { categoryId?: string }) {
   const cr = cap.categories[cat.id];
   const zone = data.zones.find((z) => z.id === cat.defaultZone);
   const zr = zone ? cap.zones[zone.id] : undefined;
-  const pile = data.items.filter((i) => i.category === cat.id && i.state === 'pile' && inPlanSeasons(i, plan.seasons));
+  const pile = data.items.filter((i) => i.category === cat.id && i.state === 'pile' && (inPlanSeasons(i, plan.seasons) || showOffSeason));
   const onRail = data.items.filter((i) => i.category === cat.id && i.state === 'on-rail');
   const targetReached = cr.target !== undefined && cr.onRail >= cr.target;
 
@@ -87,6 +106,7 @@ export function SortScreen({ categoryId }: { categoryId?: string }) {
       {cr.needed > 0 && <p class="banner">Still need {cr.needed}.</p>}
       {zone && zr && <div class="card"><Gauge used={zr.usedInches} capacity={zone.capacity} label={`${zone.name} rail`} per={plan.inchesPerItem} /></div>}
 
+      <OffSeasonNote hidden={offSeasonPile(cat.id)} onChange={() => redraw((n) => n + 1)} />
       <h2>Pile</h2>
       {pile.length === 0 && <p class="muted">Nothing in the pile for this category.</p>}
       <ul class="cards">
