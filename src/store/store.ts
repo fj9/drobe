@@ -136,6 +136,13 @@ export const actions = {
   setTheme(theme: Data['settings']['theme']) {
     return update((d) => void (d.settings.theme = theme));
   },
+  skipTarget(categoryId: string) {
+    return update((d) => {
+      const list = new Set(d.settings.noTargetNeeded ?? []);
+      list.add(categoryId);
+      d.settings.noTargetNeeded = [...list];
+    });
+  },
   finishOnboarding() {
     return update((d) => void (d.settings.onboarded = true));
   },

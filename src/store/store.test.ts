@@ -101,6 +101,11 @@ describe('settings and categories', () => {
     expect(d.categories.some((c) => c.id === 'cat-coats')).toBe(false);
     expect(activePlan(d).allocations['cat-coats']).toBeUndefined();
   });
+  it('remembers categories that need no target, without duplicates', async () => {
+    await actions.skipTarget('cat-coats');
+    await actions.skipTarget('cat-coats');
+    expect((await snapshot()).settings.noTargetNeeded).toEqual(['cat-coats']);
+  });
   it('deletes an item for good', async () => {
     const it = await add('Tee');
     await actions.deleteItem(it.id);

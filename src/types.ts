@@ -55,6 +55,8 @@ export interface Settings {
   lastBackupDate?: string;
   schemaVersion: number;
   onboarded?: boolean;
+  /** categories the user said don't need a target, so they aren't prompted about them */
+  noTargetNeeded?: string[];
 }
 
 export interface Data {
