@@ -136,6 +136,38 @@ export function AddScreen({ editId }: { editId?: string }) {
             ))}
           </div>
         </fieldset>
+        {editing && (
+          <>
+            <fieldset>
+              <legend>State</legend>
+              <div class="pills">
+                {STATES.map((st) => (
+                  <label key={st} class={`pill ${state === st ? 'on' : ''}`}>
+                    <input type="radio" name="state" checked={state === st} onChange={() => setState(st)} />
+                    {LABELS[st]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {state === 'archived' && (
+              <fieldset>
+                <legend>Reason</legend>
+                <div class="pills">
+                  <label class={`pill ${reason === '' ? 'on' : ''}`}>
+                    <input type="radio" name="reason" checked={reason === ''} onChange={() => setReason('')} />
+                    No reason
+                  </label>
+                  {REASONS.map((r) => (
+                    <label key={r} class={`pill ${reason === r ? 'on' : ''}`}>
+                      <input type="radio" name="reason" checked={reason === r} onChange={() => setReason(r)} />
+                      {LABELS[r]}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+          </>
+        )}
         <fieldset>
           <legend>Fit</legend>
           <div class="pills">
@@ -171,23 +203,6 @@ export function AddScreen({ editId }: { editId?: string }) {
               {data.zones.map((z) => <option value={z.id} key={z.id}>{z.name}</option>)}
             </select>
           </Field>
-          {editing && (
-            <>
-              <Field label="State">
-                <select value={state} onChange={(e) => setState((e.target as HTMLSelectElement).value as ItemState)}>
-                  {STATES.map((s) => <option value={s} key={s}>{LABELS[s]}</option>)}
-                </select>
-              </Field>
-              {state === 'archived' && (
-                <Field label="Reason">
-                  <select value={reason} onChange={(e) => setReason((e.target as HTMLSelectElement).value as ArchivedReason | '')}>
-                    <option value="">No reason</option>
-                    {REASONS.map((r) => <option value={r} key={r}>{LABELS[r]}</option>)}
-                  </select>
-                </Field>
-              )}
-            </>
-          )}
         </details>
 
         {error && <p class="warn" role="alert">{error}</p>}
