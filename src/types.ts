@@ -27,6 +27,8 @@ export interface Item {
   photoId?: string;
   /** linked https product image */
   imageUrl?: string;
+  /** true once the linked image has been saved via Settings → download images; reset if the link changes */
+  imageHarvested?: boolean;
   /** #RRGGBB tint; otherwise worked out from the colour text */
   colourHex?: string;
   createdAt: string;

@@ -1,6 +1,6 @@
 import type { Category, Data, Plan, Zone } from '../types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const ACTIVE_PLAN_ID = 'plan-aw';
 
 export const DEFAULT_ZONES: Zone[] = [

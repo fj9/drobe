@@ -24,7 +24,18 @@ const MAX_BYTES = 15 * 1024 * 1024;
 const TIMEOUT_MS = 20_000;
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif', 'image/svg+xml': 'svg' };
 
-export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'item';
+/** The item's own name as a filename: characters not allowed in filenames become spaces, length capped. */
+export function fileBase(name: string): string {
+  const cleaned = name.normalize('NFC')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 100)
+    .trim();
+  return cleaned || 'item';
+}
 
 type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -32,11 +43,14 @@ interface Options {
   fetchFn?: Fetch;
   signal?: AbortSignal;
   concurrency?: number;
+  /** leave out items whose image has already been downloaded */
+  skipHarvested?: boolean;
   onProgress?: (done: number, total: number) => void;
 }
 
 /** Items that have a linked image address. */
-export const linkedItems = (items: Item[]) => items.filter((i) => !!i.imageUrl);
+export const linkedItems = (items: Item[], skipHarvested = false) =>
+  items.filter((i) => !!i.imageUrl && !(skipHarvested && i.imageHarvested));
 
 async function fetchOne(url: string, fetchFn: Fetch, signal?: AbortSignal): Promise<{ status: HarvestStatus; data?: Uint8Array; type?: string }> {
   const ctl = new AbortController();
@@ -64,7 +78,7 @@ async function fetchOne(url: string, fetchFn: Fetch, signal?: AbortSignal): Prom
 /** Tries to download every linked image. Never throws for a single failure; returns what worked and why the rest did not. */
 export async function harvestImages(items: Item[], opts: Options = {}): Promise<{ results: HarvestResult[]; files: ZipEntry[] }> {
   const fetchFn = opts.fetchFn ?? ((u, i) => fetch(u, i));
-  const todo = linkedItems(items);
+  const todo = linkedItems(items, opts.skipHarvested);
   const results: HarvestResult[] = new Array(todo.length);
   const files: (ZipEntry | undefined)[] = new Array(todo.length);
   const used = new Set<string>();
@@ -79,9 +93,11 @@ export async function harvestImages(items: Item[], opts: Options = {}): Promise<
       let filename: string | undefined;
       if (r.status === 'saved' && r.data) {
         const ext = EXT[r.type!] ?? 'img';
-        let base = `${slug(it.name)}-${it.id.slice(0, 6)}`;
-        while (used.has(base)) base += 'x';
-        used.add(base);
+        // Same-named items get " (2)", " (3)"... Compared case-insensitively, as some filesystems are.
+        const root = fileBase(it.name);
+        let base = root;
+        for (let n = 2; used.has(`${base}.${ext}`.toLowerCase()); n++) base = `${root} (${n})`;
+        used.add(`${base}.${ext}`.toLowerCase());
         filename = `images/${base}.${ext}`;
         files[idx] = { name: filename, data: r.data };
       }

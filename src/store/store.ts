@@ -89,7 +89,10 @@ export const actions = {
   updateItem(itemId: string, patch: Partial<Item>) {
     return update((d) => {
       const it = d.items.find((i) => i.id === itemId);
-      if (it) Object.assign(it, patch, { updatedAt: now() });
+      if (!it) return;
+      // A different (or removed) link means any earlier download no longer matches it.
+      if ('imageUrl' in patch && patch.imageUrl !== it.imageUrl) delete it.imageHarvested;
+      Object.assign(it, patch, { updatedAt: now() });
     });
   },
   setState(itemId: string, state: ItemState, reason?: ArchivedReason) {
@@ -148,6 +151,11 @@ export const actions = {
     const old = data.items.find((i) => i.id === itemId)?.photoId;
     await update((d) => { const it = d.items.find((i) => i.id === itemId); if (it) { delete it.photoId; it.updatedAt = now(); } });
     if (old) await dropImage(old);
+  },
+  markImagesHarvested(ids: string[]) {
+    return update((d) => {
+      for (const it of d.items) if (ids.includes(it.id) && it.imageUrl) it.imageHarvested = true;
+    });
   },
   setWebImages(on: boolean) {
     return update((d) => void (d.settings.showWebImages = on));

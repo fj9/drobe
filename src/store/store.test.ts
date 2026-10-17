@@ -202,6 +202,39 @@ describe('photos', () => {
   });
 });
 
+describe('imageHarvested flag', () => {
+  it('is set only for items with a link, and cleared when the link changes or is removed', async () => {
+    await actions.addItem({ name: 'Linked', category: 'cat-tops', seasons: ['autumn'], imageUrl: 'https://a.test/1.jpg' });
+    await actions.addItem({ name: 'Plain', category: 'cat-tops', seasons: ['autumn'] });
+    let d = await snapshot();
+    const linked = d.items.find((i) => i.name === 'Linked')!;
+    const plain = d.items.find((i) => i.name === 'Plain')!;
+    await actions.markImagesHarvested([linked.id, plain.id]);
+    d = await snapshot();
+    expect(d.items.find((i) => i.name === 'Linked')!.imageHarvested).toBe(true);
+    expect(d.items.find((i) => i.name === 'Plain')!.imageHarvested).toBeUndefined();
+
+    await actions.updateItem(linked.id, { notes: 'unrelated edit', imageUrl: 'https://a.test/1.jpg' });
+    expect((await snapshot()).items.find((i) => i.id === linked.id)!.imageHarvested).toBe(true);
+
+    await actions.updateItem(linked.id, { imageUrl: 'https://a.test/2.jpg' });
+    expect((await snapshot()).items.find((i) => i.id === linked.id)!.imageHarvested).toBeUndefined();
+
+    await actions.markImagesHarvested([linked.id]);
+    await actions.updateItem(linked.id, { imageUrl: undefined });
+    expect((await snapshot()).items.find((i) => i.id === linked.id)!.imageHarvested).toBeUndefined();
+  });
+  it('survives a backup round trip', async () => {
+    await actions.addItem({ name: 'L', category: 'cat-tops', seasons: ['autumn'], imageUrl: 'https://a.test/1.jpg' });
+    const id = (await snapshot()).items[0].id;
+    await actions.markImagesHarvested([id]);
+    const text = JSON.stringify(await exportBackup(false));
+    await actions.clearAll();
+    await restoreFromText(text, 'replace');
+    expect((await snapshot()).items[0].imageHarvested).toBe(true);
+  });
+});
+
 describe('CSV export round-trips through import', () => {
   it('exports items that re-import identically', async () => {
     await actions.addItem({ name: 'Wool, navy "cardigan"', category: 'cat-cardigans', seasons: ['autumn', 'winter'], brand: 'A, B', size: 'M', notes: 'line' });

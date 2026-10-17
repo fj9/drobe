@@ -16,6 +16,9 @@ export const MIGRATIONS: Record<number, (doc: Obj) => Obj> = {
     const settings = isObj(doc.settings) ? { ...doc.settings, showWebImages: doc.settings.showWebImages ?? true } : doc.settings;
     return { ...doc, categories, settings };
   },
+  // v2 -> v3: items gain an optional imageHarvested flag. Absent means false, so nothing to rewrite;
+  // the bump just stops older app versions importing data they would silently drop the flag from.
+  2: (doc) => doc,
 };
 
 /** Upgrades data loaded from the device's own storage. */
@@ -120,6 +123,7 @@ export function parseBackup(text: string): Backup {
     if (typeof it.imageUrl !== 'string' || !HTTPS.test(it.imageUrl)) delete it.imageUrl;
     if (typeof it.colourHex !== 'string' || !HEX6.test(it.colourHex)) delete it.colourHex;
     if (typeof it.photoId !== 'string') delete it.photoId;
+    if (typeof it.imageHarvested !== 'boolean') delete it.imageHarvested;
   }
   return {
     schemaVersion: SCHEMA_VERSION,

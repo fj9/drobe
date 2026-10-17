@@ -1,7 +1,7 @@
 import { crc32 as zcrc } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { Item } from '../types';
-import { buildZip, harvestImages, linkedItems, slug } from './harvest';
+import { buildZip, fileBase, harvestImages, linkedItems } from './harvest';
 import { crc32, createZip } from './zip';
 
 const item = (name: string, imageUrl?: string, id: string = crypto.randomUUID()): Item => ({
@@ -73,13 +73,21 @@ describe('harvestImages', () => {
     const { results, files } = await harvestImages(items, { fetchFn });
     expect(results.map((r) => r.status)).toEqual(['saved', 'blocked', 'failed', 'not-image']);
     expect(files).toHaveLength(1);
-    expect(files[0].name).toMatch(/^images\/good-tee-[0-9a-f]{6}\.jpg$/);
+    expect(files[0].name).toBe('images/Good tee.jpg');
     expect(new TextDecoder().decode(files[0].data)).toBe('JPEGDATA');
   });
-  it('makes unique filenames for items with the same name', async () => {
-    const items = [item('Tee', 'https://a.test/1.png', 'aaaaaa1'), item('Tee', 'https://a.test/2.png', 'aaaaaa2')];
-    const { files } = await harvestImages(items, { fetchFn: ok('image/png', 'P') });
-    expect(new Set(files.map((f) => f.name)).size).toBe(2);
+  it('names files after the item and numbers duplicates, ignoring case', async () => {
+    const items = [item('Tee', 'https://a.test/1.png'), item('tee', 'https://a.test/2.png'), item('Tee', 'https://a.test/3.png')];
+    const { files } = await harvestImages(items, { fetchFn: ok('image/png', 'P'), concurrency: 1 });
+    expect(files.map((f) => f.name)).toEqual(['images/Tee.png', 'images/tee (2).png', 'images/Tee (3).png']);
+  });
+  it('skips already-downloaded items when asked', async () => {
+    const a = { ...item('Done', 'https://a.test/1.png'), imageHarvested: true };
+    const b = item('New', 'https://a.test/2.png');
+    expect(linkedItems([a, b]).map((i) => i.name)).toEqual(['Done', 'New']);
+    expect(linkedItems([a, b], true).map((i) => i.name)).toEqual(['New']);
+    const { results } = await harvestImages([a, b], { fetchFn: ok('image/png', 'P'), skipHarvested: true });
+    expect(results.map((r) => r.name)).toEqual(['New']);
   });
   it('requests with no credentials and no referrer, in CORS mode', async () => {
     let init: RequestInit | undefined;
@@ -105,12 +113,16 @@ describe('harvestImages', () => {
     const zip = await readZip(buildZip(results, files));
     const manifest = new TextDecoder().decode(zip['manifest.csv']);
     expect(manifest).toContain('name,image_url,result,file');
-    expect(manifest).toContain('Good,https://ok.test/a.jpg,Saved,images/good-');
+    expect(manifest).toContain('Good,https://ok.test/a.jpg,Saved,images/Good.webp');
     expect(manifest).toMatch(/Bad,https:\/\/cors\.test\/b\.jpg,"?The site doesn't allow/);
     expect(Object.keys(zip).filter((k) => k.startsWith('images/'))).toHaveLength(1);
   });
-  it('slugs names safely', () => {
-    expect(slug('Black "cat" print / dress!!')).toBe('black-cat-print-dress');
-    expect(slug('???')).toBe('item');
+  it('turns item names into safe filenames', () => {
+    expect(fileBase('Black draped t-shirt (AllSaints, medium, 1 of 2)')).toBe('Black draped t-shirt (AllSaints, medium, 1 of 2)');
+    expect(fileBase('Black "cat" print / dress?')).toBe('Black cat print dress');
+    expect(fileBase('a/b\\c:d')).toBe('a b c d');
+    expect(fileBase('..hidden..')).toBe('hidden');
+    expect(fileBase('???')).toBe('item');
+    expect(fileBase('x'.repeat(300))).toHaveLength(100);
   });
 });

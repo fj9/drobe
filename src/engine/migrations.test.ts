@@ -54,6 +54,20 @@ describe('v1 to v2 migration', () => {
   });
 });
 
+describe('v2 to v3 migration', () => {
+  it('imports a v2 backup unchanged apart from the version', () => {
+    const doc = { ...JSON.parse(good()), schemaVersion: 2 };
+    const b = parseBackup(JSON.stringify(doc));
+    expect(b.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(b.items).toEqual(doc.items);
+  });
+  it('keeps a boolean imageHarvested flag and drops other values', () => {
+    const mk = (v: unknown) => parseBackup(JSON.stringify({ ...JSON.parse(good()), items: [{ id: '1', name: 'a', category: 'cat-coats', state: 'pile', fit: 'not-checked', seasons: ['autumn'], imageHarvested: v }] })).items[0];
+    expect(mk(true).imageHarvested).toBe(true);
+    expect(mk('yes').imageHarvested).toBeUndefined();
+  });
+});
+
 describe('image fields in backups', () => {
   const withItem = (extra: object) => {
     const d = { ...JSON.parse(good()), items: [{ id: '1', name: 'a', category: 'cat-coats', state: 'pile', fit: 'not-checked', seasons: ['autumn'], ...extra }] };

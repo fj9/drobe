@@ -196,6 +196,7 @@ export function AddScreen({ editId }: { editId?: string }) {
           </Field>
           <Field label="Linked product image (https address)">
             <input type="url" inputMode="url" value={imageUrl} placeholder="https://…" onInput={(e) => setImageUrl((e.target as HTMLInputElement).value)} />
+            {editing?.imageHarvested && imageUrl.trim() === editing.imageUrl && <span class="small muted">Image downloaded</span>}
           </Field>
           <Field label="Hangs on a different rail (rare)">
             <select value={zoneOverride} onChange={(e) => setZoneOverride((e.target as HTMLSelectElement).value)}>
