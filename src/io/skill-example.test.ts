@@ -16,5 +16,7 @@ describe('add-items skill example', () => {
     expect(p.toAdd).toHaveLength(3);
     expect(p.toAdd[0]).toMatchObject({ imageUrl: 'https://example-retailer.test/images/navy-cardigan.jpg', colourHex: '#1F2A4A' });
     expect(p.toAdd[1].imageUrl).toBeUndefined();
+    expect(p.toAdd.every((i) => i.imageHarvested === undefined)).toBe(true);
+    expect(md).toContain('archived_reason,image_url,colour_hex,image_harvested');
   });
 });

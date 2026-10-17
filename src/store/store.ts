@@ -266,10 +266,10 @@ export async function restoreFromText(text: string, mode: 'merge' | 'replace') {
 
 export const itemsCsv = (d: Data) =>
   toCsv([
-    ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
+    ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex', 'image_harvested'],
     ...d.items.map((i) => [
       i.name, d.categories.find((c) => c.id === i.category)?.name, i.seasons.join(';'), i.fit, i.state,
-      i.brand, i.size, i.material, i.colour, i.notes, i.archivedReason, i.imageUrl, i.colourHex,
+      i.brand, i.size, i.material, i.colour, i.notes, i.archivedReason, i.imageUrl, i.colourHex, i.imageHarvested ? 'true' : '',
     ]),
   ]);
 export const categoriesCsv = (d: Data) => {

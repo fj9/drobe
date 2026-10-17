@@ -65,6 +65,26 @@ describe('image columns', () => {
   });
 });
 
+describe('image_harvested column', () => {
+  const data = defaultData();
+  const plan = (rows: string) => planImport(`name,category,image_url,image_harvested\n${rows}`, data) as ItemsPlan;
+  it('reads true/yes/1 as harvested and false/no/0/blank as not', () => {
+    const p = plan('A,Tops,https://x.test/a.jpg,true\nB,Tops,https://x.test/b.jpg,YES\nC,Tops,https://x.test/c.jpg,1\nD,Tops,https://x.test/d.jpg,false\nE,Tops,https://x.test/e.jpg,0\nF,Tops,https://x.test/f.jpg,');
+    expect(p.toAdd.map((i) => i.imageHarvested)).toEqual([true, true, true, undefined, undefined, undefined]);
+    expect(p.warnings).toEqual([]);
+  });
+  it('ignores it with a note when there is no valid image_url or the value is junk', () => {
+    const p = plan('A,Tops,,true\nB,Tops,http://x.test/b.jpg,true\nC,Tops,https://x.test/c.jpg,maybe');
+    expect(p.toAdd.every((i) => i.imageHarvested === undefined)).toBe(true);
+    expect(p.warnings.map((w) => w.row)).toEqual([2, 3, 3, 4]);
+    expect(p.toAdd).toHaveLength(3);
+  });
+  it('is stored on the imported item', () => {
+    const d = applyImport(plan('A,Tops,https://x.test/a.jpg,true'), data);
+    expect(d.items[0].imageHarvested).toBe(true);
+  });
+});
+
 describe('rails then categories', () => {
   it('flags categories on missing rails, then imports once rails exist', () => {
     const empty = { ...defaultData(), zones: [], categories: [] };

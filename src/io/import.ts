@@ -9,7 +9,7 @@ import {
 export type CsvKind = 'items' | 'categories' | 'rails';
 
 const KNOWN: Record<CsvKind, string[]> = {
-  items: ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
+  items: ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex', 'image_harvested'],
   categories: ['category', 'rail', 'target'],
   rails: ['rail', 'capacity_inches'],
 };
@@ -118,6 +118,17 @@ function planItems(t: Table, data: Data): ItemsPlan {
       else plan.warnings.push({ row, message: `colour_hex "${r.colour_hex}" ignored (expected #RRGGBB)` });
     }
 
+    let imageHarvested: boolean | undefined;
+    if (r.image_harvested) {
+      const v = r.image_harvested.toLowerCase();
+      if (/^(true|yes|y|1)$/.test(v)) {
+        if (imageUrl) imageHarvested = true;
+        else plan.warnings.push({ row, message: 'image_harvested ignored (the row has no valid image_url)' });
+      } else if (!/^(false|no|n|0)$/.test(v)) {
+        plan.warnings.push({ row, message: `image_harvested "${r.image_harvested}" ignored (expected true or false)` });
+      }
+    }
+
     const key = dupKey(r.name, r.brand, r.size);
     if (existing.has(key) || seenInFile.has(key)) plan.duplicates.push(r.name);
     seenInFile.add(key);
@@ -125,7 +136,7 @@ function planItems(t: Table, data: Data): ItemsPlan {
     plan.toAdd.push({
       name: r.name, category: r.category, state: state as ItemState, fit: fit as Fit, seasons,
       brand: r.brand || undefined, size: r.size || undefined, material: r.material || undefined,
-      colour: r.colour || undefined, notes: r.notes || undefined, archivedReason, imageUrl, colourHex,
+      colour: r.colour || undefined, notes: r.notes || undefined, archivedReason, imageUrl, colourHex, imageHarvested,
     });
   });
   plan.unknownCategories = [...unknown];

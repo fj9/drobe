@@ -48,8 +48,8 @@ export function CsvImport() {
         <input type="file" accept=".csv,text/csv" onChange={onFile} />
       </label>
       <button class="ghost" onClick={() => download('items-template.csv', toCsv([
-        ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
-        ['Navy wool cardigan', 'Cardigans', 'autumn;winter', 'fits-well', 'pile', 'Example Brand', 'M', 'wool', 'navy', '', '', '', ''],
+        ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex', 'image_harvested'],
+        ['Navy wool cardigan', 'Cardigans', 'autumn;winter', 'fits-well', 'pile', 'Example Brand', 'M', 'wool', 'navy', '', '', '', '', ''],
       ]), 'text/csv')}>Download items template</button>
       <p class="muted small">Import rails first, then categories, then items. Import only adds; it never overwrites or deletes.</p>
       {error && <p class="warn" role="alert">{error}</p>}

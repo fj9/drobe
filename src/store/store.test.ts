@@ -235,6 +235,20 @@ describe('imageHarvested flag', () => {
   });
 });
 
+describe('CSV export includes image_harvested', () => {
+  it('round-trips the flag through export and import', async () => {
+    await actions.addItem({ name: 'Linked', category: 'cat-tops', seasons: ['autumn'], imageUrl: 'https://a.test/1.jpg' });
+    await actions.addItem({ name: 'Other', category: 'cat-tops', seasons: ['autumn'], imageUrl: 'https://a.test/2.jpg' });
+    const first = (await snapshot()).items.find((i) => i.name === 'Linked')!;
+    await actions.markImagesHarvested([first.id]);
+    const csv = itemsCsv(await snapshot());
+    expect(csv.split('\n')[0].endsWith('image_url,colour_hex,image_harvested')).toBe(true);
+    const re = applyImport(planImport(csv, defaultData()) as ItemsPlan, defaultData());
+    expect(re.items.find((i) => i.name === 'Linked')!.imageHarvested).toBe(true);
+    expect(re.items.find((i) => i.name === 'Other')!.imageHarvested).toBeUndefined();
+  });
+});
+
 describe('CSV export round-trips through import', () => {
   it('exports items that re-import identically', async () => {
     await actions.addItem({ name: 'Wool, navy "cardigan"', category: 'cat-cardigans', seasons: ['autumn', 'winter'], brand: 'A, B', size: 'M', notes: 'line' });
