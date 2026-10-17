@@ -169,7 +169,7 @@ export function mergeBackup(base: Data, incoming: Backup): Data {
   return next;
 }
 
-export function restoreFromText(text: string, mode: 'merge' | 'replace') {
+export async function restoreFromText(text: string, mode: 'merge' | 'replace') {
   const b = parseBackup(text);
   const { schemaVersion: _s, exportedAt: _e, ...rest } = b;
   return mode === 'replace' ? actions.replaceData(rest) : actions.replaceData(mergeBackup(data, b));
