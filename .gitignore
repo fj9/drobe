@@ -1,0 +1,8 @@
+node_modules
+dist
+
+# originals; copies live in spec/ and samples/
+/Wardrobe Manager Product & Technical Spec.md
+/categories.csv
+/items.csv
+.claude/
