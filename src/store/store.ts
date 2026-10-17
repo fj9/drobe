@@ -271,8 +271,8 @@ export const categoriesCsv = (d: Data) => {
 export const railsCsv = (d: Data) =>
   toCsv([['rail', 'capacity_inches'], ...[...d.zones].sort((a, b) => a.order - b.order).map((z) => [z.name, z.capacity])]);
 
-export function download(filename: string, content: string, type = 'application/json') {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+export function download(filename: string, content: string | Blob, type = 'application/json') {
+  const url = URL.createObjectURL(content instanceof Blob ? content : new Blob([content], { type }));
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ILLUSTRATIONS } from '../data/defaults';
 import { Art, illustrationOf, webImagesOn } from './art';
+import { ImageDownload } from './ImageDownload';
 import {
   actions, activePlan, categoriesCsv, categoryItemCount, download, exportBackup, itemsCsv, photosSize, railsCsv, today, useStore, capacityOf,
 } from '../store/store';
@@ -114,6 +115,7 @@ export function SettingsScreen() {
           Show product images from the web
         </label>
         <p class="muted small">Off means the app never requests linked images and shows drawings instead. When on, showing a linked image tells that website this device asked for it. No referrer is sent.</p>
+        <ImageDownload />
         <details>
           <summary>Drawing for each category</summary>
           {data.categories.map((c) => (
