@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'preact/hooks';
-import { useStore } from '../store/store';
+import { actions, useStore } from '../store/store';
 import { FITS, LABELS, SEASONS, STATES } from '../types';
 import { Chip } from './common';
+import { REASONS, type ArchivedReason } from '../types';
 
 export function ItemsScreen() {
   const { data } = useStore();
@@ -11,6 +12,9 @@ export function ItemsScreen() {
   const [season, setSeason] = useState('');
   const [fit, setFit] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [letGo, setLetGo] = useState(false);
 
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -56,10 +60,20 @@ export function ItemsScreen() {
         <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived((e.target as HTMLInputElement).checked)} />
         Show archived
       </label>
-      <p class="muted small">{list.length} {list.length === 1 ? 'item' : 'items'}</p>
+      <div class="actions">
+        <button onClick={() => { setSelecting(!selecting); setPicked([]); setLetGo(false); }}>{selecting ? 'Done selecting' : 'Select'}</button>
+        {selecting && <button class="ghost" onClick={() => setPicked(picked.length === list.length ? [] : list.map((i) => i.id))}>{picked.length === list.length && list.length > 0 ? 'Clear all' : `Select all ${list.length}`}</button>}
+      </div>
+      <p class="muted small">{list.length} {list.length === 1 ? 'item' : 'items'}{selecting && ` · ${picked.length} selected`}</p>
       <ul class="cards">
         {list.map((i) => (
           <li class="card item" key={i.id}>
+            {selecting && (
+              <label class="check">
+                <input type="checkbox" checked={picked.includes(i.id)} onChange={() => setPicked((p) => (p.includes(i.id) ? p.filter((x) => x !== i.id) : [...p, i.id]))} />
+                <span class="muted small">Select</span>
+              </label>
+            )}
             <a href={`#/edit/${i.id}`} class="item-name">{i.name}</a>
             <div class="meta">
               <span>{catName(i.category)}</span>
@@ -71,6 +85,25 @@ export function ItemsScreen() {
           </li>
         ))}
       </ul>
+      {selecting && picked.length > 0 && (
+        <div class="bulkbar" role="group" aria-label="Actions for selected items">
+          <b>{picked.length}</b>
+          {!letGo ? (
+            <>
+              <button class="primary" onClick={() => { actions.setStateMany(picked, 'on-rail'); setPicked([]); }}>Put back</button>
+              <button onClick={() => { actions.setStateMany(picked, 'stored'); setPicked([]); }}>Not now</button>
+              <button onClick={() => { actions.setStateMany(picked, 'pile'); setPicked([]); }}>To pile</button>
+              <button class="danger" onClick={() => setLetGo(true)}>Let go</button>
+            </>
+          ) : (
+            <>
+              {REASONS.map((r) => <button key={r} onClick={() => { actions.setStateMany(picked, 'archived', r as ArchivedReason); setPicked([]); setLetGo(false); }}>{LABELS[r]}</button>)}
+              <button onClick={() => { actions.setStateMany(picked, 'archived'); setPicked([]); setLetGo(false); }}>No reason</button>
+              <button class="ghost" onClick={() => setLetGo(false)}>Back</button>
+            </>
+          )}
+        </div>
+      )}
       {data.items.length === 0 && <p class="muted">No items yet. <a href="#/add">Add your first</a>.</p>}
     </section>
   );

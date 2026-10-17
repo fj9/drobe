@@ -10,7 +10,8 @@ let repo: Repository = new IndexedDbRepository();
 let data: Data = defaultData();
 let ready = false;
 let saveError: string | undefined;
-export interface UndoInfo { itemId: string; label: string; prev: Pick<Item, 'state' | 'archivedAt' | 'archivedReason' | 'updatedAt'>; at: number }
+type Prev = Pick<Item, 'state' | 'archivedAt' | 'archivedReason' | 'updatedAt'>;
+export interface UndoInfo { label: string; prev: { itemId: string; prev: Prev }[] }
 let undoInfo: UndoInfo | undefined;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -68,21 +69,25 @@ export const actions = {
     });
   },
   setState(itemId: string, state: ItemState, reason?: ArchivedReason) {
-    const before = data.items.find((i) => i.id === itemId);
-    if (before) {
-      const verb = state === 'on-rail' ? 'Put back' : state === 'stored' ? 'Stored' : state === 'archived' ? 'Let go of' : 'Moved';
-      undoInfo = {
-        itemId, label: `${verb} "${before.name}"`, at: Date.now(),
-        prev: { state: before.state, archivedAt: before.archivedAt, archivedReason: before.archivedReason, updatedAt: before.updatedAt },
-      };
-    }
+    return actions.setStateMany([itemId], state, reason);
+  },
+  setStateMany(ids: string[], state: ItemState, reason?: ArchivedReason) {
+    const targets = data.items.filter((i) => ids.includes(i.id));
+    if (targets.length === 0) return Promise.resolve();
+    const verb = state === 'on-rail' ? 'Put back' : state === 'stored' ? 'Stored' : state === 'archived' ? 'Let go of' : 'Moved to pile';
+    undoInfo = {
+      label: targets.length === 1 ? `${verb} "${targets[0].name}"` : `${verb} ${targets.length} items`,
+      prev: targets.map((it) => ({ itemId: it.id, prev: { state: it.state, archivedAt: it.archivedAt, archivedReason: it.archivedReason, updatedAt: it.updatedAt } })),
+    };
     return update((d) => {
-      const it = d.items.find((i) => i.id === itemId);
-      if (!it) return;
-      it.state = state;
-      it.updatedAt = now();
-      if (state === 'archived') { it.archivedAt = it.updatedAt; it.archivedReason = reason; }
-      else { delete it.archivedAt; delete it.archivedReason; }
+      const t = now();
+      for (const it of d.items) {
+        if (!ids.includes(it.id)) continue;
+        it.state = state;
+        it.updatedAt = t;
+        if (state === 'archived') { it.archivedAt = t; it.archivedReason = reason; }
+        else { delete it.archivedAt; delete it.archivedReason; }
+      }
     });
   },
   undo() {
@@ -90,11 +95,13 @@ export const actions = {
     undoInfo = undefined;
     if (!u) return emit();
     return update((d) => {
-      const it = d.items.find((i) => i.id === u.itemId);
-      if (!it) return;
-      it.state = u.prev.state; it.updatedAt = u.prev.updatedAt;
-      if (u.prev.archivedAt) it.archivedAt = u.prev.archivedAt; else delete it.archivedAt;
-      if (u.prev.archivedReason) it.archivedReason = u.prev.archivedReason; else delete it.archivedReason;
+      for (const { itemId, prev } of u.prev) {
+        const it = d.items.find((i) => i.id === itemId);
+        if (!it) continue;
+        it.state = prev.state; it.updatedAt = prev.updatedAt;
+        if (prev.archivedAt) it.archivedAt = prev.archivedAt; else delete it.archivedAt;
+        if (prev.archivedReason) it.archivedReason = prev.archivedReason; else delete it.archivedReason;
+      }
     });
   },
   dismissUndo() { undoInfo = undefined; emit(); },

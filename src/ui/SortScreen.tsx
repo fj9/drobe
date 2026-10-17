@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { inPlanSeasons } from '../engine/capacity';
 import { actions, activePlan, capacityOf, useStore } from '../store/store';
@@ -8,12 +9,41 @@ export function SortScreen({ categoryId }: { categoryId?: string }) {
   const { data } = useStore();
   const cap = capacityOf(data);
   const plan = activePlan(data);
+  const catName = (id: string) => data.categories.find((c) => c.id === id)?.name ?? '?';
+
+  if (categoryId === 'all') {
+    const queue = data.items
+      .filter((i) => i.state === 'pile' && inPlanSeasons(i, plan.seasons))
+      .sort((a, b) => catName(a.category).localeCompare(catName(b.category)) || a.name.localeCompare(b.name));
+    return (
+      <section>
+        <p><a href="#/sort">‹ All categories</a></p>
+        <h1>Whole pile</h1>
+        <p class="muted">{queue.length} {queue.length === 1 ? 'item' : 'items'} to decide, grouped by category.</p>
+        {queue.length === 0 && <p class="banner ok">The pile is empty.</p>}
+        <ul class="cards">
+          {queue.map((it, n) => {
+            const cr = cap.categories[it.category];
+            const header = n === 0 || queue[n - 1].category !== it.category;
+            return (
+              <Fragment key={it.id}>
+                {header && <li key={`h-${it.category}`}><h2>{catName(it.category)} <span class="muted small">{cr?.onRail ?? 0} of {cr?.target ?? '–'} on rail</span></h2></li>}
+                <PileItem item={it} warnPutBack={cr?.target !== undefined && cr.onRail >= cr.target} />
+              </Fragment>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
 
   if (!categoryId) {
+    const pileTotal = data.items.filter((i) => i.state === 'pile' && inPlanSeasons(i, plan.seasons)).length;
     return (
       <section>
         <h1>Sort</h1>
         <p class="muted">Pick a category and decide what goes back.</p>
+        {pileTotal > 0 && <p><a class="banner-link" href="#/sort/all">Sort the whole pile ({pileTotal})</a></p>}
         <ul class="rows card">
           {data.categories.map((c) => {
             const cr = cap.categories[c.id];
