@@ -1,5 +1,5 @@
-import { SCHEMA_VERSION } from '../data/defaults';
-import { FITS, SEASONS, STATES, type Backup } from '../types';
+import { SCHEMA_VERSION, guessIllustration } from '../data/defaults';
+import { FITS, SEASONS, STATES, type Backup, type BackupImage, type Data } from '../types';
 
 export class BackupError extends Error {}
 
@@ -7,7 +7,42 @@ type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Each entry upgrades a document from version N to N+1. */
-export const MIGRATIONS: Record<number, (doc: Obj) => Obj> = {};
+export const MIGRATIONS: Record<number, (doc: Obj) => Obj> = {
+  // v1 -> v2: item images. Categories gain an illustration; linked images default to on.
+  1: (doc) => {
+    const categories = (Array.isArray(doc.categories) ? doc.categories : []).map((c) =>
+      isObj(c) && typeof c.name === 'string' && c.illustration === undefined ? { ...c, illustration: guessIllustration(c.name) } : c,
+    );
+    const settings = isObj(doc.settings) ? { ...doc.settings, showWebImages: doc.settings.showWebImages ?? true } : doc.settings;
+    return { ...doc, categories, settings };
+  },
+};
+
+/** Upgrades data loaded from the device's own storage. */
+export function migrateData(data: Data): Data {
+  const v = data.settings?.schemaVersion ?? 1;
+  if (v >= SCHEMA_VERSION) return data;
+  const out = migrate({ ...data, schemaVersion: v } as unknown as Obj) as unknown as Data & { schemaVersion?: number };
+  delete out.schemaVersion;
+  out.settings = { ...out.settings, schemaVersion: SCHEMA_VERSION };
+  return out;
+}
+
+const HTTPS = /^https:\/\//i;
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+function cleanImages(raw: unknown): Record<string, BackupImage> | undefined {
+  if (raw === undefined) return undefined;
+  if (!isObj(raw)) throw new BackupError('Backup has invalid "images".');
+  const out: Record<string, BackupImage> = {};
+  for (const [id, v] of Object.entries(raw)) {
+    if (!isObj(v) || typeof v.full !== 'string' || typeof v.thumb !== 'string' || !v.full.startsWith('data:image/') || !v.thumb.startsWith('data:image/')) {
+      throw new BackupError('Backup contains an invalid photo.');
+    }
+    out[id] = { full: v.full, thumb: v.thumb };
+  }
+  return out;
+}
 
 export function migrate(doc: Obj): Obj {
   let v = doc.schemaVersion as number;
@@ -79,8 +114,16 @@ export function parseBackup(text: string): Backup {
       throw new BackupError(`Backup contains an invalid item${isObj(it) && typeof it.name === 'string' ? ` ("${it.name}")` : ''}.`);
     }
   }
+  const images = cleanImages(doc.images);
+  for (const it of items as Obj[]) {
+    // Optional image fields: drop anything unsafe or malformed rather than rejecting the backup.
+    if (typeof it.imageUrl !== 'string' || !HTTPS.test(it.imageUrl)) delete it.imageUrl;
+    if (typeof it.colourHex !== 'string' || !HEX6.test(it.colourHex)) delete it.colourHex;
+    if (typeof it.photoId !== 'string') delete it.photoId;
+  }
   return {
     schemaVersion: SCHEMA_VERSION,
+    ...(images ? { images } : {}),
     exportedAt: typeof doc.exportedAt === 'string' ? doc.exportedAt : new Date().toISOString(),
     items: items as Backup['items'],
     zones: zones as Backup['zones'],

@@ -5,7 +5,7 @@ import { AddScreen } from './AddScreen';
 import { useHashRoute } from './common';
 import { ItemsScreen } from './ItemsScreen';
 import { Onboarding } from './Onboarding';
-import { RailsScreen } from './RailsScreen';
+import { CategoryGrid, RailsScreen } from './RailsScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SortScreen } from './SortScreen';
 import { ListsScreen } from './ListsScreen';
@@ -55,7 +55,7 @@ export function App() {
     case 'items': screen = <ItemsScreen />; break;
     case 'lists': screen = <ListsScreen />; break;
     case 'settings': screen = <SettingsScreen />; break;
-    default: screen = <RailsScreen />;
+    default: screen = top === 'rails' && arg ? <CategoryGrid categoryId={arg} /> : <RailsScreen />;
   }
   const active = top === 'edit' ? 'items' : top;
 

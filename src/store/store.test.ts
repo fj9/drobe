@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultData } from '../data/defaults';
 import { applyImport, planImport, type ItemsPlan } from '../io/import';
 import type { Data } from '../types';
-import type { Repository } from './repository';
+import type { Repository, StoredImage } from './repository';
 import {
-  actions, activePlan, buildBackup, capacityOf, categoriesCsv, init, itemsCsv, railsCsv, restoreFromText,
+  actions, activePlan, buildBackup, capacityOf, categoriesCsv, exportBackup, init, itemsCsv, railsCsv, restoreFromText,
 } from './store';
 
 class MemoryRepo implements Repository {
@@ -12,7 +12,13 @@ class MemoryRepo implements Repository {
   fail = false;
   async load() { return this.saved ? structuredClone(this.saved) : defaultData(); }
   async save(d: Data) { if (this.fail) throw new Error('disk full'); this.saved = structuredClone(d); }
-  async clear() { this.saved = undefined; }
+  images = new Map<string, StoredImage>();
+  async clear() { this.saved = undefined; this.images.clear(); }
+  async putImage(id: string, img: StoredImage) { this.images.set(id, img); }
+  async getImage(id: string) { return this.images.get(id); }
+  async deleteImage(id: string) { this.images.delete(id); }
+  async listImages() { return [...this.images].map(([id, img]) => ({ id, img })); }
+  async clearImages() { this.images.clear(); }
 }
 
 let repo: MemoryRepo;
@@ -150,6 +156,49 @@ describe('smoke: add, sort, export, wipe, import restores everything', () => {
     await expect(restoreFromText('{"schemaVersion":99}', 'replace')).rejects.toThrow(/newer/);
     await expect(restoreFromText('nope', 'replace')).rejects.toThrow();
     expect((await snapshot()).items).toHaveLength(1);
+  });
+});
+
+describe('photos', () => {
+  const blob = (t: string) => new Blob([t], { type: 'image/webp' });
+  const seedPhoto = async (itemId: string) => {
+    const photoId = crypto.randomUUID();
+    await repo.putImage(photoId, { full: blob('full'), thumb: blob('thumb') });
+    await actions.updateItem(itemId, { photoId });
+    return photoId;
+  };
+  it('deleting an item deletes its photo', async () => {
+    const it = await add('Tee');
+    const pid = await seedPhoto(it.id);
+    await actions.deleteItem(it.id);
+    expect(await repo.getImage(pid)).toBeUndefined();
+  });
+  it('removing a photo clears the reference and the stored image', async () => {
+    const it = await add('Tee');
+    const pid = await seedPhoto(it.id);
+    await actions.removePhoto(it.id);
+    expect((await snapshot()).items[0].photoId).toBeUndefined();
+    expect(await repo.getImage(pid)).toBeUndefined();
+  });
+  it('export with photos then replace-import restores them; without photos exports none', async () => {
+    const it = await add('Tee');
+    const pid = await seedPhoto(it.id);
+    const plain = await exportBackup(false);
+    expect(plain.images).toBeUndefined();
+    const text = JSON.stringify(await exportBackup(true));
+    await actions.clearAll();
+    expect(await repo.getImage(pid)).toBeUndefined();
+    await restoreFromText(text, 'replace');
+    const back = await repo.getImage(pid);
+    expect(await back!.full.text()).toBe('full');
+    expect(await back!.thumb.text()).toBe('thumb');
+    expect((await snapshot()).items[0].photoId).toBe(pid);
+  });
+  it('clear all removes photos', async () => {
+    const it = await add('Tee');
+    const pid = await seedPhoto(it.id);
+    await actions.clearAll();
+    expect(await repo.getImage(pid)).toBeUndefined();
   });
 });
 

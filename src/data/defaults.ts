@@ -1,6 +1,6 @@
 import type { Category, Data, Plan, Zone } from '../types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const ACTIVE_PLAN_ID = 'plan-aw';
 
 export const DEFAULT_ZONES: Zone[] = [
@@ -9,7 +9,26 @@ export const DEFAULT_ZONES: Zone[] = [
   { id: 'zone-long', name: 'Long', kind: 'rail', capacity: 20, unit: 'inch', order: 2 },
 ];
 
-const cat = (id: string, name: string, defaultZone: string): Category => ({ id: `cat-${id}`, name, defaultZone: `zone-${defaultZone}` });
+export const ILLUSTRATIONS = [
+  'shirt', 'top', 'light-jumper', 'bulky-jumper', 'cardigan', 'trousers', 'jeans',
+  'skirt', 'short-dress', 'long-dress', 'suit-jacket', 'coat', 'generic',
+] as const;
+
+/** Best-guess drawing for a category name; used for the starter set, imports and migration. */
+export function guessIllustration(name: string): string {
+  const n = name.toLowerCase();
+  const rules: [RegExp, string][] = [
+    [/jean|denim/, 'jeans'], [/cardigan/, 'cardigan'], [/bulky|chunky|roll ?neck/, 'bulky-jumper'],
+    [/jumper|sweater|knit/, 'light-jumper'], [/long dress|maxi/, 'long-dress'], [/dress/, 'short-dress'],
+    [/suit|jacket|blazer/, 'suit-jacket'], [/coat/, 'coat'], [/skirt/, 'skirt'],
+    [/trouser|pant|chino|cord/, 'trousers'], [/shirt|blouse/, 'shirt'], [/top|tee|t-shirt/, 'top'],
+  ];
+  return rules.find(([re]) => re.test(n))?.[1] ?? 'generic';
+}
+
+const cat = (id: string, name: string, defaultZone: string): Category => ({
+  id: `cat-${id}`, name, defaultZone: `zone-${defaultZone}`, illustration: guessIllustration(name),
+});
 
 export const DEFAULT_CATEGORIES: Category[] = [
   cat('shirts', 'Shirts', 'short'),
@@ -39,6 +58,6 @@ export function defaultData(): Data {
     zones: structuredClone(DEFAULT_ZONES),
     categories: structuredClone(DEFAULT_CATEGORIES),
     plans: [structuredClone(DEFAULT_PLAN)],
-    settings: { theme: 'system', schemaVersion: SCHEMA_VERSION },
+    settings: { theme: 'system', schemaVersion: SCHEMA_VERSION, showWebImages: true },
   };
 }

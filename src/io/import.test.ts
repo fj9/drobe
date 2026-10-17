@@ -45,6 +45,26 @@ describe('items import', () => {
   });
 });
 
+describe('image columns', () => {
+  const data = defaultData();
+  it('imports valid image_url and colour_hex', () => {
+    const p = planImport('name,category,image_url,colour_hex\nA,Tops,https://x.test/a.jpg,#aabbcc', data) as ItemsPlan;
+    expect(p.toAdd[0]).toMatchObject({ imageUrl: 'https://x.test/a.jpg', colourHex: '#AABBCC' });
+    expect(p.warnings).toEqual([]);
+  });
+  it('ignores invalid values with a warning but still imports the row', () => {
+    const p = planImport('name,category,image_url,colour_hex\nA,Tops,http://x.test/a.jpg,navy\nB,Tops,javascript:alert(1),#12', data) as ItemsPlan;
+    expect(p.toAdd).toHaveLength(2);
+    expect(p.toAdd.every((i) => i.imageUrl === undefined && i.colourHex === undefined)).toBe(true);
+    expect(p.warnings).toHaveLength(4);
+    expect(p.ignoredColumns).toEqual([]);
+  });
+  it('gives new categories a matching drawing', () => {
+    const d = applyImport(planImport('name,category\nA,Denim jackets', data) as ItemsPlan, data);
+    expect(d.categories.find((c) => c.name === 'Denim jackets')?.illustration).toBe('jeans');
+  });
+});
+
 describe('rails then categories', () => {
   it('flags categories on missing rails, then imports once rails exist', () => {
     const empty = { ...defaultData(), zones: [], categories: [] };

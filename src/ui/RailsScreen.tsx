@@ -1,5 +1,6 @@
 import { actions, capacityOf, activePlan, useStore } from '../store/store';
 import { Chip, Gauge, NumberInput, go } from './common';
+import { ItemTile } from './ItemTile';
 
 export function RailsScreen() {
   const { data } = useStore();
@@ -55,7 +56,7 @@ export function RailsScreen() {
                 const cr = cap.categories[c.id];
                 return (
                   <li key={c.id}>
-                    <button class="row-btn" onClick={() => go(`/sort/${c.id}`)}>
+                    <button class="row-btn" onClick={() => go(`/rails/${c.id}`)}>
                       <span>{c.name}</span>
                       <span class="row-meta">
                         {cr.onRail}{cr.target !== undefined ? ` / ${cr.target}` : ''}
@@ -72,6 +73,26 @@ export function RailsScreen() {
           </article>
         );
       })}
+    </section>
+  );
+}
+
+/** A category's on-rail items as a picture grid. */
+export function CategoryGrid({ categoryId }: { categoryId: string }) {
+  const { data } = useStore();
+  const cat = data.categories.find((c) => c.id === categoryId);
+  if (!cat) return <section><h1>Rails</h1><p>Category not found. <a href="#/rails">Back</a></p></section>;
+  const cr = capacityOf(data).categories[cat.id];
+  const items = data.items.filter((i) => i.category === cat.id && i.state === 'on-rail').sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <section>
+      <p><a href="#/rails">‹ Rails</a></p>
+      <h1>{cat.name}</h1>
+      <p class="muted">{cr.onRail}{cr.target !== undefined ? ` of ${cr.target}` : ''} on the rail{cr.inPile > 0 ? ` · ${cr.inPile} in pile` : ''}</p>
+      <p><a href={`#/sort/${cat.id}`}>Sort this category</a></p>
+      {items.length === 0 ? <p class="muted">Nothing on the rail yet.</p> : (
+        <ul class="grid">{items.map((i) => <li key={i.id}><ItemTile item={i} /></li>)}</ul>
+      )}
     </section>
   );
 }

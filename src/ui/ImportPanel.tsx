@@ -48,8 +48,8 @@ export function CsvImport() {
         <input type="file" accept=".csv,text/csv" onChange={onFile} />
       </label>
       <button class="ghost" onClick={() => download('items-template.csv', toCsv([
-        ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason'],
-        ['Navy wool cardigan', 'Cardigans', 'autumn;winter', 'fits-well', 'pile', 'Example Brand', 'M', 'wool', 'navy', '', ''],
+        ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
+        ['Navy wool cardigan', 'Cardigans', 'autumn;winter', 'fits-well', 'pile', 'Example Brand', 'M', 'wool', 'navy', '', '', '', ''],
       ]), 'text/csv')}>Download items template</button>
       <p class="muted small">Import rails first, then categories, then items. Import only adds; it never overwrites or deletes.</p>
       {error && <p class="warn" role="alert">{error}</p>}
@@ -62,6 +62,12 @@ export function CsvImport() {
             <>
               <p><b>{plan.toAdd.length}</b> items will be added.</p>
               {plan.duplicates.length > 0 && <p class="warn small">Possible duplicates (same name, brand and size): {plan.duplicates.slice(0, 10).join('; ')}{plan.duplicates.length > 10 ? '…' : ''}</p>}
+              {plan.warnings.length > 0 && (
+                <details>
+                  <summary class="small">{plan.warnings.length} image values ignored (rows still import)</summary>
+                  <ul class="small">{plan.warnings.map((w, n) => <li key={n}>Row {w.row}: {w.message}</li>)}</ul>
+                </details>
+              )}
               {plan.unknownCategories.map((name) => (
                 <label class="field" key={name}>
                   <span>"{name}" is not a category yet</span>

@@ -23,6 +23,12 @@ export interface Item {
   zoneOverride?: string;
   archivedReason?: ArchivedReason;
   archivedAt?: string;
+  /** id of a photo kept on the device (images store) */
+  photoId?: string;
+  /** linked https product image */
+  imageUrl?: string;
+  /** #RRGGBB tint; otherwise worked out from the colour text */
+  colourHex?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +46,8 @@ export interface Category {
   id: string;
   name: string;
   defaultZone: string;
+  /** id of the drawing used for this category's items; 'generic' if unset */
+  illustration?: string;
 }
 
 export interface Plan {
@@ -57,6 +65,9 @@ export interface Settings {
   onboarded?: boolean;
   /** categories the user said don't need a target, so they aren't prompted about them */
   noTargetNeeded?: string[];
+  /** show linked product images from the web (default on) */
+  showWebImages?: boolean;
+  webImagesNoteSeen?: boolean;
 }
 
 export interface Data {
@@ -67,9 +78,13 @@ export interface Data {
   settings: Settings;
 }
 
+export interface BackupImage { full: string; thumb: string }
+
 export interface Backup extends Data {
   schemaVersion: number;
   exportedAt: string;
+  /** photos as base64 data URLs, only present when exported with photos */
+  images?: Record<string, BackupImage>;
 }
 
 export const LABELS: Record<string, string> = {

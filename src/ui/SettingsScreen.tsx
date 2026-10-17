@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
+import { ILLUSTRATIONS } from '../data/defaults';
+import { Art, illustrationOf, webImagesOn } from './art';
 import {
-  actions, activePlan, buildBackup, categoriesCsv, categoryItemCount, download, itemsCsv, railsCsv, today, useStore, capacityOf,
+  actions, activePlan, categoriesCsv, categoryItemCount, download, exportBackup, itemsCsv, photosSize, railsCsv, today, useStore, capacityOf,
 } from '../store/store';
 import { CsvImport, JsonImport } from './ImportPanel';
 import { ConfirmButton, Field, NumberInput } from './common';
@@ -16,8 +18,14 @@ export function SettingsScreen() {
   const [newCat, setNewCat] = useState('');
   const [newCatZone, setNewCatZone] = useState(zones[0]?.id ?? '');
 
+  const [withPhotos, setWithPhotos] = useState(false);
+  const [photoInfo, setPhotoInfo] = useState({ count: 0, bytes: 0 });
+  useEffect(() => { photosSize().then(setPhotoInfo).catch(() => {}); }, [data.items]);
+  const mb = (b: number) => (b / 1024 / 1024).toFixed(1);
+
   const exportJson = async () => {
-    download(`wardrobe-backup-${today()}.json`, JSON.stringify(buildBackup(data), null, 2));
+    const backup = await exportBackup(withPhotos && photoInfo.count > 0);
+    download(`wardrobe-backup-${today()}.json`, JSON.stringify(backup));
     await actions.markBackedUp();
   };
 
@@ -76,6 +84,12 @@ export function SettingsScreen() {
       <h2>Backup</h2>
       <div class="card">
         <p class="small muted">{data.settings.lastBackupDate ? `Last backup: ${new Date(data.settings.lastBackupDate).toLocaleDateString()}` : 'No backup yet.'} Data lives only on this device.</p>
+        {photoInfo.count > 0 && (
+          <label class="check">
+            <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos((e.target as HTMLInputElement).checked)} />
+            Include photos ({photoInfo.count} photos, about {mb(photoInfo.bytes * 1.34)} MB in the file)
+          </label>
+        )}
         <div class="actions"><button class="primary" onClick={exportJson}>Export backup (JSON)</button></div>
         <h3>Restore</h3>
         <JsonImport />
@@ -91,6 +105,26 @@ export function SettingsScreen() {
           <button onClick={() => download(`categories-${today()}.csv`, categoriesCsv(data), 'text/csv')}>Categories</button>
           <button onClick={() => download(`rails-${today()}.csv`, railsCsv(data), 'text/csv')}>Rails</button>
         </div>
+      </div>
+
+      <h2>Pictures</h2>
+      <div class="card">
+        <label class="check">
+          <input type="checkbox" checked={webImagesOn(data)} onChange={(e) => actions.setWebImages((e.target as HTMLInputElement).checked)} />
+          Show product images from the web
+        </label>
+        <p class="muted small">Off means the app never requests linked images and shows drawings instead. When on, showing a linked image tells that website this device asked for it. No referrer is sent.</p>
+        <details>
+          <summary>Drawing for each category</summary>
+          {data.categories.map((c) => (
+            <div class="setting-row" key={c.id}>
+              <span class="reasons"><span class="thumb-sm"><Art illustration={illustrationOf(c)} colour="#9A9A9A" /></span>{c.name}</span>
+              <select aria-label={`${c.name} drawing`} value={illustrationOf(c)} onChange={(e) => actions.setIllustration(c.id, (e.target as HTMLSelectElement).value)}>
+                {ILLUSTRATIONS.map((i) => <option value={i} key={i}>{i}</option>)}
+              </select>
+            </div>
+          ))}
+        </details>
       </div>
 
       <h2>Appearance</h2>

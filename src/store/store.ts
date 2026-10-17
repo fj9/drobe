@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
-import { ACTIVE_PLAN_ID, SCHEMA_VERSION, defaultData } from '../data/defaults';
+import { ACTIVE_PLAN_ID, SCHEMA_VERSION, defaultData, guessIllustration } from '../data/defaults';
 import { computeCapacity } from '../engine/capacity';
-import { parseBackup } from '../engine/migrations';
+import { migrateData, parseBackup } from '../engine/migrations';
+import { blobToDataUrl, dataUrlToBlob, resizePhoto } from '../io/photo';
 import { toCsv } from '../io/csv';
-import type { ArchivedReason, Backup, Data, Item, ItemState, Plan } from '../types';
+import type { ArchivedReason, Backup, BackupImage, Data, Item, ItemState, Plan } from '../types';
 import { IndexedDbRepository, type Repository } from './repository';
 
 let repo: Repository = new IndexedDbRepository();
@@ -19,7 +20,7 @@ const emit = () => listeners.forEach((l) => l());
 export async function init(r: Repository = repo) {
   repo = r;
   try {
-    data = await repo.load();
+    data = migrateData(await repo.load());
   } catch (e) {
     saveError = `Could not read stored data: ${(e as Error).message}`;
   }
@@ -55,12 +56,35 @@ export const activePlan = (d: Data): Plan => d.plans.find((p) => p.id === ACTIVE
 export const capacityOf = (d: Data) => computeCapacity(d.items, d.zones, d.categories, activePlan(d));
 
 const now = () => new Date().toISOString();
+const imageCache = new Map<string, { thumb: string; full: string }>();
+async function dropImage(id: string) {
+  const c = imageCache.get(id);
+  if (c) { URL.revokeObjectURL(c.thumb); URL.revokeObjectURL(c.full); imageCache.delete(id); }
+  try { await repo.deleteImage(id); } catch { /* orphaned image is harmless */ }
+}
+
+/** Object URLs for a stored photo, cached so grids don't re-read IndexedDB on every render. */
+export async function photoUrls(id: string): Promise<{ thumb: string; full: string } | undefined> {
+  const hit = imageCache.get(id);
+  if (hit) return hit;
+  const img = await repo.getImage(id);
+  if (!img) return undefined;
+  const urls = { thumb: URL.createObjectURL(img.thumb), full: URL.createObjectURL(img.full) };
+  imageCache.set(id, urls);
+  return urls;
+}
+
+export async function photosSize(): Promise<{ count: number; bytes: number }> {
+  const all = await repo.listImages();
+  return { count: all.length, bytes: all.reduce((n, x) => n + x.img.full.size + x.img.thumb.size, 0) };
+}
 const update = (fn: (d: Data) => void) => { const n = structuredClone(data); fn(n); return commit(n); };
 
 export const actions = {
   addItem(input: Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'state' | 'fit'> & Partial<Pick<Item, 'state' | 'fit'>>) {
     const t = now();
-    return update((d) => void d.items.push({ state: 'pile', fit: 'not-checked', ...input, id: crypto.randomUUID(), createdAt: t, updatedAt: t }));
+    const id = crypto.randomUUID();
+    return update((d) => void d.items.push({ state: 'pile', fit: 'not-checked', ...input, id, createdAt: t, updatedAt: t })).then(() => id);
   },
   updateItem(itemId: string, patch: Partial<Item>) {
     return update((d) => {
@@ -105,8 +129,34 @@ export const actions = {
     });
   },
   dismissUndo() { undoInfo = undefined; emit(); },
-  deleteItem(itemId: string) {
-    return update((d) => void (d.items = d.items.filter((i) => i.id !== itemId)));
+  async deleteItem(itemId: string) {
+    const photoId = data.items.find((i) => i.id === itemId)?.photoId;
+    await update((d) => void (d.items = d.items.filter((i) => i.id !== itemId)));
+    if (photoId) await dropImage(photoId);
+  },
+  /** Resizes on the device, stores it, and points the item at it (replacing any earlier photo). */
+  async setPhoto(itemId: string, file: Blob) {
+    const old = data.items.find((i) => i.id === itemId)?.photoId;
+    const img = await resizePhoto(file);
+    const photoId = crypto.randomUUID();
+    await repo.putImage(photoId, img);
+    await update((d) => { const it = d.items.find((i) => i.id === itemId); if (it) { it.photoId = photoId; it.updatedAt = now(); } });
+    if (old) await dropImage(old);
+    return photoId;
+  },
+  async removePhoto(itemId: string) {
+    const old = data.items.find((i) => i.id === itemId)?.photoId;
+    await update((d) => { const it = d.items.find((i) => i.id === itemId); if (it) { delete it.photoId; it.updatedAt = now(); } });
+    if (old) await dropImage(old);
+  },
+  setWebImages(on: boolean) {
+    return update((d) => void (d.settings.showWebImages = on));
+  },
+  dismissWebImagesNote() {
+    return update((d) => void (d.settings.webImagesNoteSeen = true));
+  },
+  setIllustration(categoryId: string, illustration: string) {
+    return update((d) => { const c = d.categories.find((c) => c.id === categoryId); if (c) c.illustration = illustration; });
   },
   setCapacity(zoneId: string, capacity: number) {
     return update((d) => { const z = d.zones.find((z) => z.id === zoneId); if (z) z.capacity = capacity; });
@@ -121,7 +171,7 @@ export const actions = {
     });
   },
   addCategory(name: string, zoneId: string) {
-    return update((d) => void d.categories.push({ id: `cat-${crypto.randomUUID().slice(0, 8)}`, name, defaultZone: zoneId }));
+    return update((d) => void d.categories.push({ id: `cat-${crypto.randomUUID().slice(0, 8)}`, name, defaultZone: zoneId, illustration: guessIllustration(name) }));
   },
   editCategory(categoryId: string, patch: { name?: string; defaultZone?: string }) {
     return update((d) => { const c = d.categories.find((c) => c.id === categoryId); if (c) Object.assign(c, patch); });
@@ -151,6 +201,8 @@ export const actions = {
   },
   async clearAll() {
     await repo.clear();
+    imageCache.forEach((c) => { URL.revokeObjectURL(c.thumb); URL.revokeObjectURL(c.full); });
+    imageCache.clear();
     return commit(defaultData());
   },
   markBackedUp() {
@@ -162,6 +214,18 @@ export const categoryItemCount = (d: Data, categoryId: string) => d.items.filter
 
 export function buildBackup(d: Data): Backup {
   return { schemaVersion: SCHEMA_VERSION, exportedAt: now(), ...d, settings: { ...d.settings, schemaVersion: SCHEMA_VERSION } };
+}
+
+/** Backup document; photos are included as base64 only when asked for. */
+export async function exportBackup(includePhotos: boolean): Promise<Backup> {
+  const b = buildBackup(data);
+  if (!includePhotos) return b;
+  const wanted = new Set(data.items.map((i) => i.photoId).filter(Boolean) as string[]);
+  const images: Record<string, BackupImage> = {};
+  for (const { id, img } of await repo.listImages()) {
+    if (wanted.has(id)) images[id] = { full: await blobToDataUrl(img.full), thumb: await blobToDataUrl(img.thumb) };
+  }
+  return { ...b, images };
 }
 
 /** Merge: add records with ids not already present. Replace: swap everything. */
@@ -177,17 +241,27 @@ export function mergeBackup(base: Data, incoming: Backup): Data {
 }
 
 export async function restoreFromText(text: string, mode: 'merge' | 'replace') {
-  const b = parseBackup(text);
-  const { schemaVersion: _s, exportedAt: _e, ...rest } = b;
+  const b = parseBackup(text); // throws before anything is written
+  const { schemaVersion: _s, exportedAt: _e, images, ...rest } = b;
+  const blobs: { id: string; img: { full: Blob; thumb: Blob } }[] = [];
+  for (const [id, v] of Object.entries(images ?? {})) {
+    blobs.push({ id, img: { full: await dataUrlToBlob(v.full), thumb: await dataUrlToBlob(v.thumb) } });
+  }
+  if (mode === 'replace') {
+    await repo.clearImages();
+    imageCache.forEach((c) => { URL.revokeObjectURL(c.thumb); URL.revokeObjectURL(c.full); });
+    imageCache.clear();
+  }
+  for (const { id, img } of blobs) await repo.putImage(id, img);
   return mode === 'replace' ? actions.replaceData(rest) : actions.replaceData(mergeBackup(data, b));
 }
 
 export const itemsCsv = (d: Data) =>
   toCsv([
-    ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason'],
+    ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
     ...d.items.map((i) => [
       i.name, d.categories.find((c) => c.id === i.category)?.name, i.seasons.join(';'), i.fit, i.state,
-      i.brand, i.size, i.material, i.colour, i.notes, i.archivedReason,
+      i.brand, i.size, i.material, i.colour, i.notes, i.archivedReason, i.imageUrl, i.colourHex,
     ]),
   ]);
 export const categoriesCsv = (d: Data) => {

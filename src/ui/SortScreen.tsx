@@ -4,6 +4,7 @@ import { inPlanSeasons } from '../engine/capacity';
 import { actions, activePlan, capacityOf, useStore } from '../store/store';
 import { LABELS, REASONS, type ArchivedReason, type Item } from '../types';
 import { Chip, Gauge, go } from './common';
+import { ItemImage, webImagesOn } from './art';
 
 export function SortScreen({ categoryId }: { categoryId?: string }) {
   const { data } = useStore();
@@ -113,13 +114,17 @@ export function SortScreen({ categoryId }: { categoryId?: string }) {
 }
 
 function ItemSummary({ item }: { item: Item }) {
+  const { data } = useStore();
   return (
-    <div class="item-main">
-      <a href={`#/edit/${item.id}`} class="item-name">{item.name}</a>
-      <div class="meta">
-        {item.brand && <span>{item.brand}</span>}
-        {item.size && <span>size {item.size}</span>}
-        <Chip tone={item.fit === 'doesnt-fit' ? 'warn' : item.fit === 'fits-replace' ? 'muted' : undefined}>{LABELS[item.fit]}</Chip>
+    <div class="picture-card">
+      <ItemImage item={item} category={data.categories.find((c) => c.id === item.category)} showWeb={webImagesOn(data)} />
+      <div class="item-main">
+        <a href={`#/edit/${item.id}`} class="item-name">{item.name}</a>
+        <div class="meta">
+          {item.brand && <span>{item.brand}</span>}
+          {item.size && <span>size {item.size}</span>}
+          <Chip tone={item.fit === 'doesnt-fit' ? 'warn' : item.fit === 'fits-replace' ? 'muted' : undefined}>{LABELS[item.fit]}</Chip>
+        </div>
       </div>
     </div>
   );

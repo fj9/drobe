@@ -1,5 +1,6 @@
 import { toTable, type Table } from './csv';
-import { ACTIVE_PLAN_ID } from '../data/defaults';
+import { ACTIVE_PLAN_ID, guessIllustration } from '../data/defaults';
+import { isHex, normaliseHex } from '../engine/colour';
 import {
   FITS, REASONS, SEASONS, STATES,
   type ArchivedReason, type Data, type Fit, type Item, type ItemState, type Season,
@@ -8,7 +9,7 @@ import {
 export type CsvKind = 'items' | 'categories' | 'rails';
 
 const KNOWN: Record<CsvKind, string[]> = {
-  items: ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason'],
+  items: ['name', 'category', 'seasons', 'fit', 'state', 'brand', 'size', 'material', 'colour', 'notes', 'archived_reason', 'image_url', 'colour_hex'],
   categories: ['category', 'rail', 'target'],
   rails: ['rail', 'capacity_inches'],
 };
@@ -31,6 +32,8 @@ export interface ItemsPlan {
   kind: 'items';
   toAdd: Omit<Item, 'id' | 'createdAt' | 'updatedAt'>[];
   problems: RowProblem[];
+  /** rows still imported, but with an image value ignored */
+  warnings: RowProblem[];
   duplicates: string[];
   ignoredColumns: string[];
   /** category names in the file that don't exist yet */
@@ -76,7 +79,7 @@ export function planImport(text: string, data: Data, kind?: CsvKind): ImportPlan
 }
 
 function planItems(t: Table, data: Data): ItemsPlan {
-  const plan: ItemsPlan = { kind: 'items', toAdd: [], problems: [], duplicates: [], ignoredColumns: ignored(t, 'items'), unknownCategories: [] };
+  const plan: ItemsPlan = { kind: 'items', toAdd: [], problems: [], warnings: [], duplicates: [], ignoredColumns: ignored(t, 'items'), unknownCategories: [] };
   const existing = new Set(data.items.map((i) => dupKey(i.name, i.brand, i.size)));
   const seenInFile = new Set<string>();
   const unknown = new Set<string>();
@@ -104,6 +107,17 @@ function planItems(t: Table, data: Data): ItemsPlan {
     }
     if (!data.categories.some((c) => norm(c.name) === norm(r.category))) unknown.add(r.category);
 
+    let imageUrl: string | undefined;
+    if (r.image_url) {
+      if (/^https:\/\/[^\s]+$/i.test(r.image_url)) imageUrl = r.image_url;
+      else plan.warnings.push({ row, message: `image_url ignored (only https addresses are accepted)` });
+    }
+    let colourHex: string | undefined;
+    if (r.colour_hex) {
+      if (isHex(r.colour_hex)) colourHex = normaliseHex(r.colour_hex);
+      else plan.warnings.push({ row, message: `colour_hex "${r.colour_hex}" ignored (expected #RRGGBB)` });
+    }
+
     const key = dupKey(r.name, r.brand, r.size);
     if (existing.has(key) || seenInFile.has(key)) plan.duplicates.push(r.name);
     seenInFile.add(key);
@@ -111,7 +125,7 @@ function planItems(t: Table, data: Data): ItemsPlan {
     plan.toAdd.push({
       name: r.name, category: r.category, state: state as ItemState, fit: fit as Fit, seasons,
       brand: r.brand || undefined, size: r.size || undefined, material: r.material || undefined,
-      colour: r.colour || undefined, notes: r.notes || undefined, archivedReason,
+      colour: r.colour || undefined, notes: r.notes || undefined, archivedReason, imageUrl, colourHex,
     });
   });
   plan.unknownCategories = [...unknown];
@@ -194,7 +208,7 @@ export function applyImport(plan: ImportPlan, data: Data, choices: ApplyChoices 
       const zone = next.zones.find((z) => z.name === c.rail);
       if (!zone) continue;
       const cid = `cat-${slug(c.name)}-${id().slice(0, 4)}`;
-      next.categories.push({ id: cid, name: c.name, defaultZone: zone.id });
+      next.categories.push({ id: cid, name: c.name, defaultZone: zone.id, illustration: guessIllustration(c.name) });
       if (c.target !== undefined) plans.allocations[cid] = c.target;
     }
     for (const f of plan.targetFills) {
@@ -210,7 +224,7 @@ export function applyImport(plan: ImportPlan, data: Data, choices: ApplyChoices 
       const zone = next.zones[0];
       if (!zone) return undefined;
       const cid = `cat-${slug(name)}-${id().slice(0, 4)}`;
-      next.categories.push({ id: cid, name, defaultZone: zone.id });
+      next.categories.push({ id: cid, name, defaultZone: zone.id, illustration: guessIllustration(name) });
       return cid;
     };
     for (const it of plan.toAdd) {
